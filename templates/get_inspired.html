@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Get Inspired{% endblock %}
+
+{% block content %}
+<h2>🎨 Get Inspired by Real Masterpieces</h2>
+
+{% if artworks %}
+    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+        {% for art in artworks %}
+            <div style="width: 220px; border: 1px solid #ddd; padding: 10px; border-radius: 8px;">
+                <img src="{{ art.image_url }}" alt="{{ art.title }}" style="width: 100%; height: auto;">
+                <h4>{{ art.title }}</h4>
+                <p><strong>Artist:</strong> {{ art.artist }}</p>
+                <p><strong>Date:</strong> {{ art.date }}</p>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p>No artworks found. Try again later.</p>
+{% endif %}
+
+<br>
+<a href="{{ url_for('dashboard') }}">⬅ Back to Dashboard</a>
+{% endblock %}

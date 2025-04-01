@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Art App{% endblock %}
+
+{% block content %}
+  <h1>Welcome to the Artwork Authenticator and Generator</h1>
+  <p style="text-align: center;">
+    Create, price, and authenticate your artwork with ease.
+  </p>
+
+  {% if not current_user.is_authenticated %}
+    <div style="text-align: center; margin-top: 30px;">
+      <a href="{{ url_for('register') }}"
+         style="font-weight: bold; padding: 10px 20px; margin: 10px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px;">
+         Register
+      </a>
+      <a href="{{ url_for('login') }}"
+         style="font-weight: bold; padding: 10px 20px; margin: 10px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px;">
+         Login
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Generate AI Artwork{% endblock %}
+
+{% block content %}
+<h2>🎨 Generate AI Artwork</h2>
+
+<form method="POST" id="artForm" style="margin-top: 20px;">
+    <label for="prompt" style="font-weight: bold;">Art Prompt:</label><br>
+    <input type="text"
+           name="prompt"
+           id="prompt"
+           required
+           placeholder="e.g. A futuristic city at sunset"
+           style="width: 100%; max-width: 500px; padding: 10px; font-size: 16px; border-radius: 5px; border: 1px solid #ccc;"><br><br>
+
+    <button type="submit"
+            style="padding: 10px 20px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+        Generate Artwork
+    </button>
+</form>
+
+<a href="{{ url_for('dashboard') }}" style="display: inline-block; margin-top: 20px; text-decoration: none; color: #555;">
+    ← Back to Dashboard
+</a>
+
+<!-- Loading Spinner -->
+<div id="loading" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+     background-color: rgba(255, 255, 255, 0.7); z-index: 9999; text-align: center; padding-top: 200px;">
+    <div style="border: 8px solid #f3f3f3; border-top: 8px solid #4CAF50; border-radius: 50%; width: 60px; height: 60px;
+         animation: spin 1s linear infinite; margin: 0 auto;"></div>
+    <p style="margin-top: 15px; font-size: 18px; font-weight: bold;">Generating your AI artwork...</p>
+</div>
+
+<!-- Spinner Animation CSS -->
+<style>
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+</style>
+
+<!-- JS to show spinner on form submit -->
+<script>
+document.getElementById('artForm').addEventListener('submit', function() {
+    document.getElementById('loading').style.display = 'block';
+});
+</script>
+{% endblock %}

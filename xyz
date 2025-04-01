@@ -1,0 +1,362 @@
+from flask import Flask, render_template, redirect, url_for, flash, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+import os
+import requests
+import base64
+import random
+import boto3
+from datetime import datetime 
+
+# --- Flask application Setup ---cd cd
+application = Flask(__name__)
+application.config['SECRET_KEY'] = 'your_secret_key'
+application.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///application.db'
+application.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+application.config['PRICE_API'] = "https://gi96frqbc5.execute-api.eu-west-1.amazonaws.com"
+application.config['AUTH_API'] = "https://rf83t8chb1.execute-api.eu-west-1.amazonaws.com"
+
+# --- S3 Config ---
+application.config['S3_BUCKET'] = 'artauthneticate'
+application.config['S3_REGION'] = 'eu-west-1'  # e.g. 'us-east-1'
+
+# ✅ Create S3 client ONCE here and reuse everywhere
+s3_client = boto3.client('s3', region_name=application.config['S3_REGION'])
+
+
+
+# --- Extensions ---
+db = SQLAlchemy(application)
+login_manager = LoginManager(application)
+login_manager.login_view = 'login'
+
+# --- Models ---
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+class Artwork(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    image_url = db.Column(db.String(500), nullable=False)
+    price = db.Column(db.Float)
+    is_authenticated = db.Column(db.Boolean, default=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+# --- S3 Upload Helper ---
+
+
+import mimetypes
+
+def upload_file_to_s3(file_obj, bucket, object_key):
+    try:
+        # Use mimetypes to guess the content type
+        content_type, _ = mimetypes.guess_type(object_key)
+        if not content_type:
+            content_type = 'application/octet-stream'  # Default binary stream
+
+        s3_client.upload_fileobj(
+            file_obj,
+            bucket,
+            object_key,
+            ExtraArgs={
+                "ACL": "public-read",
+                "ContentType": content_type
+            }
+        )
+    except Exception as e:
+        print(f"S3 upload failed: {e}")
+        return None
+    return f"https://{bucket}.s3.{application.config['S3_REGION']}.amazonaws.com/{object_key}"
+
+
+
+
+
+def delete_object_from_s3(bucket, object_key):
+    """Delete a single object from S3."""
+    s3_client.delete_object('s3', region_name=application.config['S3_REGION'])
+    try:
+        s3_client.delete_object(Bucket=bucket, Key=object_key)
+    except Exception as e:
+        print(f"Delete error: {e}")
+
+
+
+# --- User Loader ---
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# --- Routes ---
+@application.route('/')
+def home():
+    return render_template('home.html')
+
+@application.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        if username.isnumeric():
+            flash("Username cannot be only numbers.", "danger")
+            return redirect(url_for('register'))
+
+        if len(password) < 6:
+            flash("Password must be at least 6 characters long.", "danger")
+            return redirect(url_for('register'))
+
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user:
+            flash("Username already exists.", "danger")
+            return redirect(url_for('register'))
+
+        user = User(username=username)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        flash("Registration successful!", "success")
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+@application.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(url_for('dashboard'))
+
+        flash('Invalid credentials', 'danger')
+
+    return render_template('login.html')
+
+@application.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
+
+@application.route('/dashboard')
+@login_required
+def dashboard():
+    artworks = Artwork.query.filter_by(user_id=current_user.id).all()
+    return render_template('dashboard.html', artworks=artworks)
+
+@application.route('/create_artwork', methods=['GET', 'POST'])
+@login_required
+def create_artwork():
+    if request.method == 'POST':
+        title = request.form['title']
+        description = request.form['description']
+        image = request.files['image']
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        filename = secure_filename(f"{timestamp}_{image.filename}")
+
+        # ✅ Read the file into memory
+        image_bytes = image.read()
+
+        # ✅ Reset file pointer for S3 upload
+        image.seek(0)
+
+        # ✅ Upload to S3
+        image_url = upload_file_to_s3(image, application.config['S3_BUCKET'], filename)
+
+        # ✅ Create artwork entry
+        artwork = Artwork(
+            title=title,
+            description=description,
+            image_url=image_url,
+            user_id=current_user.id
+        )
+
+        # ✅ Encode to base64
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+
+        # ✅ PRICE_API
+        try:
+            price_res = requests.post(
+                application.config['PRICE_API'],
+                headers={'Content-Type': 'application/json'},
+                json={"file": base64_image}
+            )
+            print("PRICE_API response:", price_res.status_code, price_res.text)
+
+            if price_res.status_code == 200:
+                data = price_res.json()
+                artwork.price = data.get("predicted_price", 0)
+        except Exception as e:
+            print(f"❌ PRICE_API error: {e}")
+
+        # ✅ AUTH_API
+        try:
+            auth_res = requests.post(
+                application.config['AUTH_API'],
+                headers={'Content-Type': 'application/json'},
+                json={"file": base64_image}
+            )
+            print("AUTH_API response:", auth_res.status_code, auth_res.text)
+
+            if auth_res.status_code == 200:
+                status = auth_res.json().get('status', '').lower()
+                artwork.is_authenticated = status == "authentic"
+        except Exception as e:
+            print(f"❌ AUTH_API error: {e}")
+
+        db.session.add(artwork)
+        db.session.commit()
+
+        return render_template('artwork_details.html', artwork=artwork)
+
+    return render_template('create_artwork.html')
+
+
+@application.route('/generate_artwork', methods=['GET', 'POST'])
+@login_required
+def generate_artwork():
+    if request.method == 'POST':
+        prompt = request.form['prompt']
+        try:
+            # 1. Generate image from Pollinations API
+            image_url = f"https://image.pollinations.ai/prompt/{prompt.replace(' ', '%20')}"
+            response = requests.get(image_url)
+            image_data = response.content
+
+            # 2. Save image temporarily
+            filename = f"generated_{current_user.id}_{Artwork.query.count()}.jpg"
+            with open(filename, 'wb') as f:
+                f.write(image_data)
+
+            # 3. Upload to S3
+            with open(filename, 'rb') as f:
+                image_url_s3 = upload_file_to_s3(f, application.config['S3_BUCKET'], filename)
+
+            # 🔐 CHECK: if upload failed
+            if not image_url_s3:
+                flash("⚠️ Upload to S3 failed. Please try again.", "danger")
+                os.remove(filename)
+                return redirect(url_for("generate_artwork"))
+
+            # 4. Read image again for base64 conversion
+            with open(filename, 'rb') as img_file:
+                base64_string = base64.b64encode(img_file.read()).decode('utf-8')
+
+            # 5. Delete temp file
+            os.remove(filename)
+
+            # 6. Create new artwork entry
+            artwork = Artwork(
+                title=f"AI Art: {prompt[:50]}",
+                description=prompt,
+                image_url=image_url_s3,
+                user_id=current_user.id
+            )
+
+            # 7. PRICE_API
+            try:
+                price_res = requests.post(
+                    application.config['PRICE_API'],
+                    headers={'Content-Type': 'application/json'},
+                    json={'file': base64_string}
+                )
+                print("PRICE_API response:", price_res.status_code, price_res.text)
+                if price_res.status_code == 200:
+                    artwork.price = price_res.json().get('predicted_price', 0)
+            except Exception as e:
+                print("PRICE_API error:", e)
+
+            # 8. AUTH_API
+            try:
+                auth_res = requests.post(
+                    application.config['AUTH_API'],
+                    headers={'Content-Type': 'application/json'},
+                    json={'file': base64_string}
+                )
+                print("AUTH_API response:", auth_res.status_code, auth_res.text)
+                if auth_res.status_code == 200:
+                    status = auth_res.json().get('status', '').lower()
+                    artwork.is_authenticated = status == "authentic"
+            except Exception as e:
+                print("AUTH_API error:", e)
+
+            # 9. Save to DB
+            db.session.add(artwork)
+            db.session.commit()
+
+            return render_template('artwork_details.html', artwork=artwork)
+
+        except Exception as e:
+            flash(f'🎨 Artwork generation failed: {str(e)}', 'danger')
+            return redirect(url_for('generate_artwork'))
+
+    return render_template('generate_artwork.html')
+
+
+
+@application.route('/get_inspired')
+def get_inspired():
+    try:
+        page = random.randint(1, 100)
+        url = f"https://api.artic.edu/api/v1/artworks?page={page}&limit=5&fields=id,title,image_id,artist_title,date_display"
+        response = requests.get(url)
+        data = response.json()
+
+        artworks = []
+        for item in data.get("data", []):
+            image_id = item.get("image_id")
+            if image_id:
+                image_url = f"https://www.artic.edu/iiif/2/{image_id}/full/843,/0/default.jpg"
+                artworks.append({
+                    "title": item.get("title"),
+                    "artist": item.get("artist_title") or "Unknown Artist",
+                    "date": item.get("date_display") or "Unknown Date",
+                    "image_url": image_url
+                })
+
+        return render_template("get_inspired.html", artworks=artworks)
+    except Exception as e:
+        flash(f"Failed to load inspirational art: {e}", "danger")
+        return render_template("get_inspired.html", artworks=[])
+
+@application.route('/delete_artwork/<int:artwork_id>', methods=['POST'])
+@login_required
+def delete_artwork(artwork_id):
+    artwork = Artwork.query.get_or_404(artwork_id)
+    if artwork.user_id != current_user.id:
+        flash('You do not have permission to delete this artwork.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    try:
+        # Get S3 filename from the URL
+        filename = artwork.image_url.split('/')[-1]
+        delete_object_from_s3(application.config['S3_BUCKET'], filename)
+    except Exception as e:
+        print(f"Error deleting from S3: {e}")
+
+    db.session.delete(artwork)
+    db.session.commit()
+    flash('Artwork deleted successfully.', 'success')
+    return redirect(url_for('dashboard'))
+
+# --- Run ---
+if __name__ == '__main__':
+    with application.app_context():
+        db.create_all()
+    application.run(host='0.0.0.0', port=8080, debug=True)

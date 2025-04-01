@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Artwork Details{% endblock %}
+
+{% block content %}
+<h2>Artwork Submitted</h2>
+<p><strong>Title:</strong> {{ artwork.title }}</p>
+
+{% if not artwork.title.startswith('AI Art:') %}
+  <p><strong>Description:</strong> {{ artwork.description }}</p>
+
+  {% if artwork.timestamp %}
+    <p><strong>Submitted:</strong> {{ artwork.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+  {% else %}
+    <p><strong>Submitted:</strong> Unknown</p>
+  {% endif %}
+{% endif %}
+
+<p><strong>Price:</strong> {{ artwork.price if artwork.price else 'Pending' }}</p>
+<p><strong>Authenticated:</strong> {{ 'Yes' if artwork.is_authenticated else 'No' }}</p>
+
+<!-- ✅ Only show saved local image -->
+{% if artwork.image_url.startswith('static/') %}
+  <img src="{{ url_for('static', filename=artwork.image_url.split('static/')[-1]) }}" alt="{{ artwork.title }}" width="300">
+{% endif %}
+
+<br><br>
+<a href="{{ url_for('dashboard') }}">Go to Dashboard</a>
+{% endblock %}
