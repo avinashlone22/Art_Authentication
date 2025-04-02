@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/home/ec2-user/environment/ArtAuthenticator/venv"
+VIRTUAL_ENV="/home/ec2-user/environment/Art_Authentication/venv"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"
