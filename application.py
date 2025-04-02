@@ -349,4 +349,4 @@ def delete_artwork(artwork_id):
 if __name__ == '__main__':
     with application.app_context():
         db.create_all()  # Create database tables if they don't exist
-    application.run(host='0.0.0.0', port=8000, debug=True)  # Run the Flask app.
+    application.run(host='0.0.0.0', port=8080, debug=True)  # Run the Flask app.
