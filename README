@@ -1,0 +1,99 @@
+
+# Art Authentication, Generation, and Pricing Platform 
+
+
+Overview
+
+The Art Authentication, Generation, and Pricing Platform is a scalable, serverless application built using Flask, AWS Lambda, and public APIs. 
+It allows users to:
+- Generate digital artwork via prompts using the Pollinations API.
+- Authenticate the originality of the artwork using a custom AWS Lambda function.
+- Predict the market value of the artwork using another Lambda function.
+- View inspirational artworks from the Art Institute of Chicago API.
+
+This project integrates AWS services like Elastic Beanstalk, API Gateway, and Lambda for a scalable cloud solution.
+
+# Prerequisites
+
+Before installing and running the application, ensure that the following dependencies are available:
+- Python 3.x 
+- Git (for version control)
+- Pip (for installing Python dependencies)
+
+## Installation Steps
+
+1. Clone the Repository
+Clone the repository from GitHub:
+
+
+git clone https://github.com/avinashlone22/Art_Authentication.git
+
+cd Art_Authentication
+
+2. Set Up Virtual Environment
+
+3. Install Dependencies
+
+4. Configure AWS Services
+You need to configure AWS services for deployment and Lambda functions:
+- Set up AWS Lambda functions (for art authentication and price prediction)
+- Set up API Gateway to route requests to Lambda
+- Set up Elastic Beanstalk for hosting the Flask web application
+
+
+
+For local testing, you can skip the AWS configurations, but to run the platform fully, these services are essential for cloud deployment.
+
+5. Environment Variables
+
+
+
+6. Run the Application Locally
+
+
+`
+python application.py
+
+
+This will start a local server, usually running at `http://127.0.0.1:5000/`, where you can access the platform's user interface.
+
+
+Deployment to AWS
+To deploy the application to AWS:
+
+1. Deploy Flask App to Elastic Beanstalk**:
+  
+2. Set Up AWS Lambda Functions**:
+
+
+
+Usage
+Once the application is running:
+
+1. **User Registration/Login**:
+   - Users can register and log in using the provided forms.
+   
+2. **Generate Art**:
+   - Provide a prompt to generate AI-based artwork using the Pollinations API.
+   
+3. **Authenticate Art**:
+   - After artwork generation or upload, the system will verify its authenticity using the SHA-256 hashing technique.
+
+4. **Predict Price**:
+   - The system predicts a mock price for the artwork using the Pricing Lambda.
+
+5. **Get Inspired**:
+   - Explore historical artwork and artist data via the Art Institute API.
+   
+   
+## Testing
+To test the application locally:
+
+
+Open your browser and visit `http://127.0.0.1:5000/` to interact with the platform.or 
+Use elastic benstalk public url and the port 
+
+###########
+Challenges 
+Due to IAM service role restrictions i was not able to use s3 for my image stoiring 
+nor Aws Dynamodb.

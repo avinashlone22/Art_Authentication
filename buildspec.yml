@@ -1,0 +1,26 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9  # Specify Python version
+    commands:
+      - echo "Installing dependencies..."
+      - pip install --upgrade pip
+      - pip install -r requirements.txt pylint flask_sqlalchemy
+
+  pre_build:
+    commands:
+      - echo "Running pre-build checks..."
+      - python --version  
+      - pylint $CODEBUILD_SRC_DIR/*.py || true
+
+
+  post_build:
+    commands:
+      - echo "Post-build tasks completed."
+
+artifacts:
+  files:
+    - '**/*'
+  discard-paths: no
